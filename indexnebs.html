@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nebuliser Position Analysis – v20 Exact Data</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Load jsPDF and AutoTable -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+  body {
+    background: #f4f4f5;
+    color: #18181b;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", sans-serif;
+    min-height: 100vh;
+  }
+  .panel {
+    background: #ffffff;
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05), 0 4px 10px rgba(0,0,0,0.02);
+  }
+  #circuitCanvas {
+    background: #fcfcfc;
+    border-radius: 1rem;
+    border: 1px solid #e4e4e7;
+    width: 100%;
+    height: auto;
+  }
+  .control-button {
+    padding: 0.6rem 0.2rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #52525b;
+    background: #f4f4f5;
+    border-radius: 0.6rem;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .control-button:hover { background: #e4e4e7; color: #18181b; }
+  .control-button.active {
+    background: #ffffff;
+    color: #0ea5e9;
+    font-weight: 600;
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    transform: translateY(-1px);
+  }
+  .control-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #71717a;
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+  .control-section { margin-bottom: 1.25rem; }
+  .status-box {
+    background: #f0f9ff;
+    border: 1px solid #e0f2fe;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: #0c4a6e;
+    line-height: 1.5;
+  }
+  .download-button {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    background: #18181b;
+    color: white;
+    font-weight: 500;
+    margin-top: 1rem;
+    transition: all 0.2s;
+  }
+  .download-button:hover { background: #27272a; transform: translateY(-1px); }
+  
+  /* Config Modal Styles */
+  .modal-overlay {
+    position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center;
+    z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .config-modal {
+    background: white; padding: 2rem; border-radius: 1rem; width: 90%; max-width: 600px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    max-height: 90vh; overflow-y: auto;
+  }
+  .data-input {
+    width: 100%; border: 1px solid #e4e4e7; padding: 0.3rem; border-radius: 0.375rem;
+    text-align: center; font-size: 0.875rem;
+  }
+  .input-header { font-size: 0.7rem; font-weight: bold; color: #6b7280; text-align: center; margin-bottom: 0.25rem; }
+</style>
+</head>
+<body class="p-4 md:p-8">
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <div class="flex justify-between items-end">
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight">Nebuliser Position Analysis</h1>
+        <span class="text-xs text-zinc-400 font-medium hidden md:block mt-1">Exact Data Mapping (Heated vs Unheated)</span>
+    </div>
+    <button id="configBtn" class="text-sm text-blue-600 font-semibold hover:text-blue-800 underline cursor-pointer">
+        View/Edit Data Table
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Controls -->
+    <div class="panel lg:col-span-4 space-y-4">
+      
+      <div class="control-section">
+        <label class="control-label">Circuit Condition</label>
+        <div class="control-group grid grid-cols-2 gap-2" data-group="humidifier">
+          <button class="control-button" data-value="on">Heated (Wet)</button>
+          <button class="control-button" data-value="off">Unheated (Dry)</button>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <label class="control-label">Nebuliser Position</label>
+        <div class="control-group grid grid-cols-3 gap-2" data-group="nebPos">
+          <button class="control-button" data-value="pos1">Pos 1 (Between ETT & Y)</button>
+          <button class="control-button" data-value="pos2">Pos 2 (6" from Y)</button>
+          <button class="control-button" data-value="pos3">Pos 3 (6" from Vent)</button>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <label class="control-label">Nebuliser Type</label>
+        <div class="control-group grid grid-cols-3 gap-2" data-group="nebType">
+          <button class="control-button" data-value="vm">Mesh (VM)</button>
+          <button class="control-button" data-value="jn">Jet (JN)</button>
+          <button class="control-button" data-value="un">Ultrasonic (UN)</button>
+        </div>
+      </div>
+      
+      <div class="control-section">
+        <label class="control-label">Bias Flow</label>
+        <div class="control-group grid grid-cols-2 gap-2" data-group="biasFlow">
+          <button class="control-button" data-value="2">Low (2 L/min)</button>
+          <button class="control-button" data-value="5">High (5 L/min)</button>
+        </div>
+      </div>
+
+      <div id="leftStatus" class="status-box !mt-6">Status: Initializing…</div>
+      <button id="downloadPdfButton" class="download-button">Download Data Report PDF</button>
+    </div>
+
+    <!-- Simulation Canvas -->
+    <div class="panel lg:col-span-8 p-4 relative">
+      <canvas id="circuitCanvas" width="1100" height="650"></canvas>
+      <!-- Overlay for Deposition -->
+      <div id="depositionLabel" class="absolute bottom-8 right-8 text-right">
+        <div class="text-5xl font-bold text-zinc-800" id="depValue">0.0%</div>
+        <div class="text-sm text-zinc-500 font-medium">Inhaled Dose (Mean %)</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Configuration Modal -->
+<div id="configModal" class="modal-overlay">
+    <div class="config-modal space-y-6">
+        <div class="flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-900">Data Table Configuration</h3>
+            <button id="closeConfigTop" class="text-gray-400 hover:text-gray-600">&times;</button>
+        </div>
+        
+        <p class="text-sm text-gray-500">Exact values mapped from reference table.</p>
+        
+        <div class="grid grid-cols-7 gap-2 text-center items-end border-b pb-2">
+            <div class="col-span-1"></div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 1 (ETT-Y)</div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 2 (6" from Y)</div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 3 (6" from Vent)</div>
+            
+            <div class="col-span-1 text-xs font-bold text-gray-400 text-left">Type</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+        </div>
+
+        <!-- JN Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Jet (JN)</div>
+            <input type="number" id="jn_p1_h" class="data-input" value="4.66">
+            <input type="number" id="jn_p1_u" class="data-input" value="7.62">
+            <input type="number" id="jn_p2_h" class="data-input" value="3.61">
+            <input type="number" id="jn_p2_u" class="data-input" value="9.66">
+            <input type="number" id="jn_p3_h" class="data-input" value="5.98">
+            <input type="number" id="jn_p3_u" class="data-input" value="14.66">
+        </div>
+
+        <!-- VM Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Mesh (VM)</div>
+            <input type="number" id="vm_p1_h" class="data-input" value="12.82">
+            <input type="number" id="vm_p1_u" class="data-input" value="14.54">
+            <input type="number" id="vm_p2_h" class="data-input" value="16.79">
+            <input type="number" id="vm_p2_u" class="data-input" value="30.24">
+            <input type="number" id="vm_p3_h" class="data-input" value="8.39">
+            <input type="number" id="vm_p3_u" class="data-input" value="24.20">
+        </div>
+
+        <!-- UN Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Ultra (UN)</div>
+            <input type="number" id="un_p1_h" class="data-input" value="10.07">
+            <input type="number" id="un_p1_u" class="data-input" value="10.70">
+            <input type="number" id="un_p2_h" class="data-input" value="16.53">
+            <input type="number" id="un_p2_u" class="data-input" value="24.68">
+            <input type="number" id="un_p3_h" class="data-input" value="4.59">
+            <input type="number" id="un_p3_u" class="data-input" value="10.51">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-4">
+            <button id="cancelConfig" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+            <button id="saveConfig" class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded">Update Simulation</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// *** SIMULATION ENGINE v20 (Exact Data from Table) ***
+
+const canvas = document.getElementById("circuitCanvas");
+const ctx = canvas.getContext("2d");
+let animationRunning = false;
+let particles = [];
+let breathPhase = 0; // 0 = insp, 1 = exp
+let phaseTimer = 0;
+
+// Initial State
+const simState = { 
+  nebPos: 'pos2', 
+  nebType: 'vm', 
+  biasFlow: '2', 
+  humidifier: 'on' // on=Heated, off=Unheated
+};
+
+const colors = { 
+  text: '#18181b', 
+  vent: '#cbd5e1', 
+  tube: '#e2e8f0', 
+  humidifierBody: '#64748b',
+  humidifierWater: '#38bdf8',
+  inspActive: '#3b82f6', 
+  inspStatic: '#93c5fd', 
+  expActive: '#22c55e', 
+  expStatic: '#86efac', 
+  yPiece: '#a855f7', 
+  lung: '#f43f5e', 
+  nebGlow: '#0ea5e9',
+  marker: '#f59e0b'
+};
+
+// Polyfill
+CanvasRenderingContext2D.prototype.roundRect = CanvasRenderingContext2D.prototype.roundRect || function (x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  this.beginPath();
+  this.moveTo(x+r, y);
+  this.arcTo(x+w, y,   x+w, y+h, r);
+  this.arcTo(x+w, y+h, x,   y+h, r);
+  this.arcTo(x,   y+h, x,   y,   r);
+  this.arcTo(x,   y,   x+w, y,   r);
+  this.closePath();
+  return this;
+};
+
+// --- COORDINATES & PATHS ---
+function getPath() {
+  return {
+    insp: [
+      { x: 100, y: 330 }, // 0: Vent
+      { x: 280, y: 330 }, // 1: Pre-Hum / Pos 3
+      { x: 380, y: 330 }, // 2: Humidifier Inlet
+      { x: 450, y: 360 }, // 3: Humidifier Chamber
+      { x: 520, y: 330 }, // 4: Humidifier Outlet
+      { x: 680, y: 330 }, // 5: Mid-Limb / Pos 2
+      { x: 840, y: 330 }, // 6: Y-Piece / Pos 1
+      { x: 920, y: 380 }, // 7: ET
+      { x: 980, y: 450 }  // 8: Lung
+    ],
+    exp: [
+      { x: 840, y: 330 }, 
+      { x: 600, y: 150 }, 
+      { x: 100, y: 150 }
+    ]
+  };
+}
+
+// --- DATA STORAGE (Nested Object for Exact Table Values) ---
+// Structure: type -> position -> condition (heated/unheated)
+let dataMatrix = {
+    jn: {
+        pos1: { heated: 4.66, unheated: 7.62 },
+        pos2: { heated: 3.61, unheated: 9.66 },
+        pos3: { heated: 5.98, unheated: 14.66 }
+    },
+    vm: {
+        pos1: { heated: 12.82, unheated: 14.54 },
+        pos2: { heated: 16.79, unheated: 30.24 },
+        pos3: { heated: 8.39, unheated: 24.20 }
+    },
+    un: {
+        pos1: { heated: 10.07, unheated: 10.70 },
+        pos2: { heated: 16.53, unheated: 24.68 },
+        pos3: { heated: 4.59, unheated: 10.51 }
+    }
+};
+
+function getDepositionValue() {
+    const { nebType, nebPos, humidifier, biasFlow } = simState;
+    const condition = (humidifier === 'on') ? 'heated' : 'unheated';
+    
+    let val = dataMatrix[nebType][nebPos][condition];
+
+    // Apply Bias Flow Penalty if high (Table doesn't specify flow, assuming table is optimized flow. 
+    // We apply a penalty for "High Flow" user selection to simulate washout)
+    if (biasFlow === '5') {
+        val *= 0.8; // 20% reduction for high bias flow washout
+    }
+    
+    return Math.round(val * 100) / 100;
+}
+
+function updateText() {
+  const val = getDepositionValue();
+  document.getElementById("depValue").innerText = val.toFixed(2) + "%";
+  
+  const { nebPos, nebType, humidifier } = simState;
+  const condition = (humidifier === 'on') ? 'Heated' : 'Unheated';
+  
+  let msg = `<b>${condition} Circuit Analysis:</b><br>`;
+  
+  if (nebType === 'vm' && nebPos === 'pos2' && humidifier === 'off') {
+      msg += "<span class='text-green-700 font-bold'>Optimal Configuration!</span> VM at Position 2 (6\" from Y) in an unheated circuit yields the highest deposition (30.24%) in this dataset.";
+  } else if (nebType === 'jn' && nebPos === 'pos2' && humidifier === 'on') {
+      msg += "<span class='text-red-600 font-bold'>Poor Efficiency.</span> Jet Nebuliser at Position 2 in a heated circuit performs poorly (3.61%) due to rain-out and lack of reservoir effect.";
+  } else if (nebPos === 'pos3') {
+      msg += "<b>Position 3 (Proximal/Vent):</b> Allows tubing to act as a reservoir. ";
+      if (nebType === 'vm' && humidifier === 'off') msg += "Significant gain for VM in dry circuit (24.20%).";
+      if (nebType === 'jn' && humidifier === 'off') msg += "Best position for Jet Nebuliser in dry circuit (14.66%).";
+  } else if (nebPos === 'pos1') {
+      msg += "<b>Position 1 (Distal/Y-Piece):</b> Minimizes transit loss, but bypasses reservoir benefits.";
+  } else if (nebPos === 'pos2') {
+      msg += "<b>Position 2 (6\" from Y):</b> Balance between reservoir volume and transit loss.";
+  }
+  
+  document.getElementById("leftStatus").innerHTML = msg;
+}
+
+function setupControls() {
+  document.querySelectorAll(".control-group").forEach(group => {
+    group.addEventListener("click", (e) => {
+      const btn = e.target.closest(".control-button");
+      if (!btn) return;
+      simState[group.dataset.group] = btn.dataset.value;
+      group.querySelectorAll(".control-button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      particles = []; 
+      updateText();
+      startAnimation(); 
+    });
+    const initialBtn = group.querySelector(`[data-value="${simState[group.dataset.group]}"]`);
+    if (initialBtn) initialBtn.classList.add("active");
+  });
+  
+  // Config Modal
+  const modal = document.getElementById('configModal');
+  document.getElementById('configBtn').onclick = () => modal.classList.add('open');
+  document.getElementById('closeConfigTop').onclick = () => modal.classList.remove('open');
+  document.getElementById('cancelConfig').onclick = () => modal.classList.remove('open');
+  
+  document.getElementById('saveConfig').onclick = () => {
+      // Read all inputs and update matrix
+      ['jn', 'vm', 'un'].forEach(type => {
+          ['1', '2', '3'].forEach(p => {
+             dataMatrix[type][`pos${p}`].heated = parseFloat(document.getElementById(`${type}_p${p}_h`).value);
+             dataMatrix[type][`pos${p}`].unheated = parseFloat(document.getElementById(`${type}_p${p}_u`).value);
+          });
+      });
+      modal.classList.remove('open');
+      updateText();
+  };
+  
+  updateText();
+}
+
+// --- Drawing ---
+
+function createParticle() {
+  const count = (simState.nebType === 'vm') ? 2 : 1;
+  
+  let startX = 0;
+  let startY = 330;
+  
+  // Coordinates based on getPath nodes
+  if (simState.nebPos === 'pos3') startX = 280; // 6" from Vent
+  if (simState.nebPos === 'pos2') startX = 680; // 6" from Y
+  if (simState.nebPos === 'pos1') startX = 880; // Between Y & ETT (Just after Y in drawing logic)
+
+  for(let i=0; i<count; i++) {
+    particles.push({
+      x: startX,
+      y: startY + (Math.random() * 14 - 7),
+      life: 1.0,
+      targetIndex: 0 
+    });
+  }
+}
+
+function drawMarker(x, y, label, subtext) {
+    ctx.fillStyle = colors.marker;
+    ctx.beginPath(); ctx.arc(x, y + 45, 14, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(label, x, y+49);
+    
+    ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif";
+    ctx.fillText(subtext, x, y+65);
+    
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.beginPath(); ctx.moveTo(x, y+15); ctx.lineTo(x, y+31); ctx.stroke();
+}
+
+function drawCircuit() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
+
+  const paths = getPath();
+
+  // 1. Ventilator
+  ctx.fillStyle = colors.vent; ctx.roundRect(20, 280, 100, 100, 10); ctx.fill();
+  ctx.fillStyle = "#475569"; ctx.fillText("Vent", 45, 335);
+
+  // 2. Insp Limb Wireframe
+  ctx.lineWidth = 24; ctx.strokeStyle = colors.tube;
+  ctx.beginPath();
+  ctx.moveTo(100, 330);
+  ctx.lineTo(380, 330); // to hum
+  ctx.moveTo(520, 330); // from hum
+  ctx.lineTo(840, 330); // to Y
+  ctx.stroke();
+
+  // 3. Humidifier
+  if (simState.humidifier === 'on') {
+    ctx.fillStyle = colors.humidifierBody; ctx.fillRect(380, 290, 140, 100);
+    ctx.fillStyle = colors.humidifierWater; ctx.fillRect(390, 340, 120, 40);
+    ctx.fillStyle = "white"; ctx.fillText("Heated Humidifier", 390, 320);
+  } else {
+     ctx.beginPath(); ctx.moveTo(380, 330); ctx.lineTo(520, 330); ctx.stroke(); // Bypass
+  }
+
+  // 4. Markers
+  drawMarker(280, 330, "3", "6\" from Vent");
+  drawMarker(680, 330, "2", "6\" from Y");
+  drawMarker(880, 330, "1", "ETT-Y");
+
+  // 5. Y-Piece & Lung
+  ctx.fillStyle = colors.yPiece; ctx.beginPath(); ctx.arc(840, 330, 25, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText("Y", 840, 335);
+  
+  ctx.strokeStyle = "#fb7185"; ctx.lineWidth = 18;
+  ctx.beginPath(); ctx.moveTo(860, 330); ctx.lineTo(920, 380); ctx.stroke();
+
+  ctx.fillStyle = colors.lung;
+  ctx.beginPath(); ctx.ellipse(980, 450, 80, 100, 0.2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "white"; ctx.fillText("Patient", 980, 450);
+
+  // 6. Exp Limb
+  ctx.lineWidth = 24; ctx.strokeStyle = colors.tube;
+  ctx.beginPath(); 
+  ctx.moveTo(paths.exp[0].x, paths.exp[0].y - 10);
+  ctx.lineTo(paths.exp[1].x, paths.exp[1].y); 
+  ctx.lineTo(paths.exp[2].x, paths.exp[2].y); ctx.stroke();
+
+  // 7. Nebulizer Visual
+  let nebX = 0;
+  if(simState.nebPos === 'pos3') nebX = 280;
+  if(simState.nebPos === 'pos2') nebX = 680;
+  if(simState.nebPos === 'pos1') nebX = 880; 
+  
+  ctx.fillStyle = colors.nebGlow; ctx.shadowBlur = 20; ctx.shadowColor = colors.nebGlow;
+  ctx.beginPath(); ctx.arc(nebX, 320, 15, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  
+  ctx.fillStyle = "#0ea5e9"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText(simState.nebType.toUpperCase(), nebX, 300);
+}
+
+function moveTowards(p, target, speed) {
+  const dx = target.x - p.x;
+  const dy = target.y - p.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < speed) { p.x = target.x; p.y = target.y; return true; }
+  else { p.x += (dx/dist)*speed; p.y += (dy/dist)*speed; return false; }
+}
+
+function animate() {
+  if(!animationRunning) return; 
+  phaseTimer++;
+  if (phaseTimer > 240) { breathPhase = (breathPhase + 1) % 2; phaseTimer = 0; }
+
+  drawCircuit();
+  createParticle();
+
+  const paths = getPath();
+  const speedInsp = 4.0;
+  const speedBias = (simState.biasFlow === '2') ? 0.5 : 3.0;
+
+  particles.forEach(p => {
+    let target = null;
+    let speed = 0;
+    
+    if (breathPhase === 0) {
+        // Inspiration
+        let tIdx = 0;
+        if (p.x < 280) tIdx = 1;
+        else if (p.x < 380) tIdx = 2;
+        else if (p.x < 450) tIdx = 3;
+        else if (p.x < 520) tIdx = 4;
+        else if (p.x < 680) tIdx = 5;
+        else if (p.x < 840) tIdx = 6;
+        else if (p.x < 920) tIdx = 7;
+        else tIdx = 8;
+        
+        target = paths.insp[tIdx];
+        speed = speedInsp;
+    } else {
+        // Expiration (Washout)
+        // Washout only happens if particle is not already in patient
+        if (p.x < 840) {
+             target = {x: 840, y: 330}; // push to Y
+             speed = speedBias;
+        } else if (p.x > 920) {
+             // Trapped in lung, fade out
+             p.life -= 0.02;
+        } else {
+             // In Y or ET, wash out to Exp
+             if(p.x > 600 && p.y < 200) target = paths.exp[2];
+             else target = paths.exp[1];
+             speed = 3.0;
+        }
+    }
+    
+    if(target) moveTowards(p, target, speed);
+    if(p.x > 950 && breathPhase === 0) p.life -= 0.1; // Absorb in lung
+    
+    ctx.fillStyle = `rgba(37, 99, 235, ${p.life})`;
+    if (simState.nebType === 'jn') ctx.fillStyle = `rgba(245, 158, 11, ${p.life})`;
+    if (simState.nebType === 'un') ctx.fillStyle = `rgba(139, 92, 246, ${p.life})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+  });
+
+  particles = particles.filter(p => p.life > 0 && p.x > 50);
+  requestAnimationFrame(animate);
+}
+
+function startAnimation(){
+  animationRunning = false; 
+  particles = [];
+  breathPhase = 0;
+  phaseTimer = 0;
+  createParticle();
+  animationRunning = true;
+  requestAnimationFrame(animate);
+}
+
+function generatePDF() {
+    if (typeof window.jspdf === 'undefined') return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'pt', 'a4');
+    
+    let y = 40;
+    doc.setFontSize(18); doc.text("Nebuliser Deposition Report", 40, y); y+=30;
+    doc.setFontSize(10); doc.text("Exact Data Mapping (Mean %)", 40, y); y+=20;
+    
+    const headers = [["Condition", "Pos 1 (ETT-Y)", "Pos 2 (6\" from Y)", "Pos 3 (6\" from Vent)"]];
+    
+    // Helper to format
+    const fmt = (t, p) => `${dataMatrix[t][p].heated}% / ${dataMatrix[t][p].unheated}%`;
+    
+    const body = [
+        ["Jet (JN) [Heated / Unheated]", fmt('jn', 'pos1'), fmt('jn', 'pos2'), fmt('jn', 'pos3')],
+        ["Mesh (VM) [Heated / Unheated]", fmt('vm', 'pos1'), fmt('vm', 'pos2'), fmt('vm', 'pos3')],
+        ["Ultra (UN) [Heated / Unheated]", fmt('un', 'pos1'), fmt('un', 'pos2'), fmt('un', 'pos3')]
+    ];
+    
+    doc.autoTable({
+        startY: y,
+        head: headers,
+        body: body,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185] },
+        styles: { fontSize: 10 }
+    });
+    
+    doc.save("nebuliser_data_report.pdf");
+}
+
+window.onload = function() {
+  animationRunning = true;
+  setupControls();
+  startAnimation();
+  document.getElementById('downloadPdfButton').addEventListener('click', generatePDF);
+};
+</script>
+</body>
+</html>
