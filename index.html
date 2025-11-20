@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Nebuliser Position – v16 Enhanced PDF</title>
+<title>Nebuliser Position Analysis – v20 Exact Data</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <!-- Load jsPDF and AutoTable -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -80,14 +80,37 @@
     transition: all 0.2s;
   }
   .download-button:hover { background: #27272a; transform: translateY(-1px); }
+  
+  /* Config Modal Styles */
+  .modal-overlay {
+    position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center;
+    z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .config-modal {
+    background: white; padding: 2rem; border-radius: 1rem; width: 90%; max-width: 600px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    max-height: 90vh; overflow-y: auto;
+  }
+  .data-input {
+    width: 100%; border: 1px solid #e4e4e7; padding: 0.3rem; border-radius: 0.375rem;
+    text-align: center; font-size: 0.875rem;
+  }
+  .input-header { font-size: 0.7rem; font-weight: bold; color: #6b7280; text-align: center; margin-bottom: 0.25rem; }
 </style>
 </head>
 <body class="p-4 md:p-8">
 <div class="max-w-7xl mx-auto space-y-6">
 
   <div class="flex justify-between items-end">
-    <h1 class="text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight">Nebuliser Position &amp; Humidification</h1>
-    <span class="text-xs text-zinc-400 font-medium hidden md:block">Comparative Analysis (Mesh, Jet, Ultrasonic)</span>
+    <div>
+        <h1 class="text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight">Nebuliser Position Analysis</h1>
+        <span class="text-xs text-zinc-400 font-medium hidden md:block mt-1">Exact Data Mapping (Heated vs Unheated)</span>
+    </div>
+    <button id="configBtn" class="text-sm text-blue-600 font-semibold hover:text-blue-800 underline cursor-pointer">
+        View/Edit Data Table
+    </button>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -96,48 +119,41 @@
     <div class="panel lg:col-span-4 space-y-4">
       
       <div class="control-section">
-        <label class="control-label">Humidifier (Heated Wire)</label>
+        <label class="control-label">Circuit Condition</label>
         <div class="control-group grid grid-cols-2 gap-2" data-group="humidifier">
-          <button class="control-button" data-value="on">ON (Wet Circuit)</button>
-          <button class="control-button" data-value="off">OFF (Dry Circuit)</button>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <label class="control-label">Patient Model</label>
-        <div class="control-group grid grid-cols-2 gap-2" data-group="patientType">
-          <button class="control-button" data-value="adult">Adult</button>
-          <button class="control-button" data-value="pediatric">Pediatric</button>
+          <button class="control-button" data-value="on">Heated (Wet)</button>
+          <button class="control-button" data-value="off">Unheated (Dry)</button>
         </div>
       </div>
 
       <div class="control-section">
         <label class="control-label">Nebuliser Position</label>
-        <div class="control-group grid grid-cols-2 gap-2" data-group="nebPos">
-          <button class="control-button" data-value="preHumid">Proximal (Reservoir)</button>
-          <button class="control-button" data-value="yPiece">Distal (Y-Piece)</button>
+        <div class="control-group grid grid-cols-3 gap-2" data-group="nebPos">
+          <button class="control-button" data-value="pos1">Pos 1 (Between ETT & Y)</button>
+          <button class="control-button" data-value="pos2">Pos 2 (6" from Y)</button>
+          <button class="control-button" data-value="pos3">Pos 3 (6" from Vent)</button>
         </div>
       </div>
 
       <div class="control-section">
         <label class="control-label">Nebuliser Type</label>
         <div class="control-group grid grid-cols-3 gap-2" data-group="nebType">
-          <button class="control-button" data-value="vmn">VMN (Mesh)</button>
-          <button class="control-button" data-value="jet">JN (Jet)</button>
-          <button class="control-button" data-value="usn">USN (Ultrasonic)</button>
+          <button class="control-button" data-value="vm">Mesh (VM)</button>
+          <button class="control-button" data-value="jn">Jet (JN)</button>
+          <button class="control-button" data-value="un">Ultrasonic (UN)</button>
         </div>
       </div>
-
+      
       <div class="control-section">
         <label class="control-label">Bias Flow</label>
         <div class="control-group grid grid-cols-2 gap-2" data-group="biasFlow">
-          <button class="control-button" data-value="2">2 L/min (Low)</button>
-          <button class="control-button" data-value="5">5 L/min (High)</button>
+          <button class="control-button" data-value="2">Low (2 L/min)</button>
+          <button class="control-button" data-value="5">High (5 L/min)</button>
         </div>
       </div>
 
       <div id="leftStatus" class="status-box !mt-6">Status: Initializing…</div>
-      <button id="downloadPdfButton" class="download-button">Download Comparative Data PDF</button>
+      <button id="downloadPdfButton" class="download-button">Download Data Report PDF</button>
     </div>
 
     <!-- Simulation Canvas -->
@@ -145,16 +161,78 @@
       <canvas id="circuitCanvas" width="1100" height="650"></canvas>
       <!-- Overlay for Deposition -->
       <div id="depositionLabel" class="absolute bottom-8 right-8 text-right">
-        <div class="text-4xl font-bold text-zinc-800" id="depValue">0.0%</div>
-        <div class="text-sm text-zinc-500">Inhaled Dose (Est. % of Total)</div>
+        <div class="text-5xl font-bold text-zinc-800" id="depValue">0.0%</div>
+        <div class="text-sm text-zinc-500 font-medium">Inhaled Dose (Mean %)</div>
       </div>
     </div>
 
   </div>
 </div>
 
+<!-- Configuration Modal -->
+<div id="configModal" class="modal-overlay">
+    <div class="config-modal space-y-6">
+        <div class="flex justify-between items-center">
+            <h3 class="text-lg font-bold text-gray-900">Data Table Configuration</h3>
+            <button id="closeConfigTop" class="text-gray-400 hover:text-gray-600">&times;</button>
+        </div>
+        
+        <p class="text-sm text-gray-500">Exact values mapped from reference table.</p>
+        
+        <div class="grid grid-cols-7 gap-2 text-center items-end border-b pb-2">
+            <div class="col-span-1"></div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 1 (ETT-Y)</div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 2 (6" from Y)</div>
+            <div class="col-span-2 text-xs font-bold text-blue-700">Pos 3 (6" from Vent)</div>
+            
+            <div class="col-span-1 text-xs font-bold text-gray-400 text-left">Type</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+            <div class="input-header">Heated</div><div class="input-header">Unheated</div>
+        </div>
+
+        <!-- JN Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Jet (JN)</div>
+            <input type="number" id="jn_p1_h" class="data-input" value="4.66">
+            <input type="number" id="jn_p1_u" class="data-input" value="7.62">
+            <input type="number" id="jn_p2_h" class="data-input" value="3.61">
+            <input type="number" id="jn_p2_u" class="data-input" value="9.66">
+            <input type="number" id="jn_p3_h" class="data-input" value="5.98">
+            <input type="number" id="jn_p3_u" class="data-input" value="14.66">
+        </div>
+
+        <!-- VM Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Mesh (VM)</div>
+            <input type="number" id="vm_p1_h" class="data-input" value="12.82">
+            <input type="number" id="vm_p1_u" class="data-input" value="14.54">
+            <input type="number" id="vm_p2_h" class="data-input" value="16.79">
+            <input type="number" id="vm_p2_u" class="data-input" value="30.24">
+            <input type="number" id="vm_p3_h" class="data-input" value="8.39">
+            <input type="number" id="vm_p3_u" class="data-input" value="24.20">
+        </div>
+
+        <!-- UN Row -->
+        <div class="grid grid-cols-7 gap-2 items-center">
+            <div class="text-xs font-bold text-gray-700 text-left">Ultra (UN)</div>
+            <input type="number" id="un_p1_h" class="data-input" value="10.07">
+            <input type="number" id="un_p1_u" class="data-input" value="10.70">
+            <input type="number" id="un_p2_h" class="data-input" value="16.53">
+            <input type="number" id="un_p2_u" class="data-input" value="24.68">
+            <input type="number" id="un_p3_h" class="data-input" value="4.59">
+            <input type="number" id="un_p3_u" class="data-input" value="10.51">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-4">
+            <button id="cancelConfig" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+            <button id="saveConfig" class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded">Update Simulation</button>
+        </div>
+    </div>
+</div>
+
 <script>
-// *** SIMULATION ENGINE v16 (Enhanced PDF Content) ***
+// *** SIMULATION ENGINE v20 (Exact Data from Table) ***
 
 const canvas = document.getElementById("circuitCanvas");
 const ctx = canvas.getContext("2d");
@@ -165,11 +243,10 @@ let phaseTimer = 0;
 
 // Initial State
 const simState = { 
-  nebPos: 'preHumid', 
-  nebType: 'vmn', 
+  nebPos: 'pos2', 
+  nebType: 'vm', 
   biasFlow: '2', 
-  patientType: 'adult',
-  humidifier: 'on' 
+  humidifier: 'on' // on=Heated, off=Unheated
 };
 
 const colors = { 
@@ -184,10 +261,11 @@ const colors = {
   expStatic: '#86efac', 
   yPiece: '#a855f7', 
   lung: '#f43f5e', 
-  nebGlow: '#0ea5e9' 
+  nebGlow: '#0ea5e9',
+  marker: '#f59e0b'
 };
 
-// --- POLYFILL for roundRect (Fixes Script Error) ---
+// Polyfill
 CanvasRenderingContext2D.prototype.roundRect = CanvasRenderingContext2D.prototype.roundRect || function (x, y, w, h, r) {
   if (w < 2 * r) r = w / 2;
   if (h < 2 * r) r = h / 2;
@@ -201,99 +279,87 @@ CanvasRenderingContext2D.prototype.roundRect = CanvasRenderingContext2D.prototyp
   return this;
 };
 
-// --- WAYPOINTS ---
+// --- COORDINATES & PATHS ---
 function getPath() {
-  if (simState.humidifier === 'on') {
-    return {
-      insp: [
-        { x: 160, y: 330 }, // 0: Vent
-        { x: 380, y: 330 }, // 1: Humidifier Inlet
-        { x: 450, y: 360 }, // 2: Humidifier Chamber (Deep)
-        { x: 520, y: 330 }, // 3: Humidifier Outlet
-        { x: 740, y: 330 }, // 4: Y-Piece
-        { x: 880, y: 380 }, // 5: ET
-        { x: 950, y: 450 }  // 6: Lung
-      ],
-      exp: [
-        { x: 740, y: 330 }, 
-        { x: 500, y: 150 }, 
-        { x: 160, y: 150 }
-      ]
-    };
-  } else {
-    return {
-      insp: [
-        { x: 160, y: 330 },
-        { x: 740, y: 330 },
-        { x: 880, y: 380 },
-        { x: 950, y: 450 }
-      ],
-      exp: [
-        { x: 740, y: 330 }, 
-        { x: 500, y: 150 }, 
-        { x: 160, y: 150 }
-      ]
-    };
-  }
+  return {
+    insp: [
+      { x: 100, y: 330 }, // 0: Vent
+      { x: 280, y: 330 }, // 1: Pre-Hum / Pos 3
+      { x: 380, y: 330 }, // 2: Humidifier Inlet
+      { x: 450, y: 360 }, // 3: Humidifier Chamber
+      { x: 520, y: 330 }, // 4: Humidifier Outlet
+      { x: 680, y: 330 }, // 5: Mid-Limb / Pos 2
+      { x: 840, y: 330 }, // 6: Y-Piece / Pos 1
+      { x: 920, y: 380 }, // 7: ET
+      { x: 980, y: 450 }  // 8: Lung
+    ],
+    exp: [
+      { x: 840, y: 330 }, 
+      { x: 600, y: 150 }, 
+      { x: 100, y: 150 }
+    ]
+  };
 }
 
-// --- DEPOSITION LOGIC (Consensus Model) ---
-function calculateDeposition() {
-    const { nebType, nebPos, biasFlow, patientType, humidifier } = simState;
-    
-    let baseDeposition = 0; 
-
-    // 1. Establish Nebuliser Baseline
-    if (nebType === 'vmn') baseDeposition = 18; 
-    else if (nebType === 'jet') baseDeposition = 5;  
-    else if (nebType === 'usn') baseDeposition = 8;  
-    
-    let deposition = baseDeposition;
-
-    // 2. Apply Placement
-    if (nebType === 'jet') {
-        if (nebPos === 'preHumid') deposition *= 1.2; 
-        else deposition *= 0.8; 
-    } else { 
-        if (nebPos === 'preHumid') deposition *= 0.75; 
-        else deposition *= 1.1; 
+// --- DATA STORAGE (Nested Object for Exact Table Values) ---
+// Structure: type -> position -> condition (heated/unheated)
+let dataMatrix = {
+    jn: {
+        pos1: { heated: 4.66, unheated: 7.62 },
+        pos2: { heated: 3.61, unheated: 9.66 },
+        pos3: { heated: 5.98, unheated: 14.66 }
+    },
+    vm: {
+        pos1: { heated: 12.82, unheated: 14.54 },
+        pos2: { heated: 16.79, unheated: 30.24 },
+        pos3: { heated: 8.39, unheated: 24.20 }
+    },
+    un: {
+        pos1: { heated: 10.07, unheated: 10.70 },
+        pos2: { heated: 16.53, unheated: 24.68 },
+        pos3: { heated: 4.59, unheated: 10.51 }
     }
+};
 
-    // 3. Apply Bias Flow Penalty (Washout)
-    if (biasFlow === '5') deposition *= 0.7; 
+function getDepositionValue() {
+    const { nebType, nebPos, humidifier, biasFlow } = simState;
+    const condition = (humidifier === 'on') ? 'heated' : 'unheated';
+    
+    let val = dataMatrix[nebType][nebPos][condition];
 
-    // 4. Apply Humidifier Effect 
-    if (humidifier === 'off') {
-        deposition *= 1.4; // 40% increase for dry circuit
+    // Apply Bias Flow Penalty if high (Table doesn't specify flow, assuming table is optimized flow. 
+    // We apply a penalty for "High Flow" user selection to simulate washout)
+    if (biasFlow === '5') {
+        val *= 0.8; // 20% reduction for high bias flow washout
     }
     
-    // 5. Apply Pediatric Penalty 
-    if (patientType === 'pediatric') deposition *= 0.7; 
-
-    return Math.min(Math.round(deposition * 10) / 10, 40.0);
+    return Math.round(val * 100) / 100;
 }
 
-// --- UI / Control Functions ---
 function updateText() {
-  const val = calculateDeposition();
-  document.getElementById("depValue").innerText = val.toFixed(1) + "%";
+  const val = getDepositionValue();
+  document.getElementById("depValue").innerText = val.toFixed(2) + "%";
   
-  let status = "";
-  if (simState.humidifier === 'on') {
-    status = "<b>Humidifier ON:</b> Humidity reduces overall delivery via particle growth (rain-out).";
-  } else {
-    status = "<b>Humidifier OFF:</b> Maximum theoretical delivery (dry circuit).";
+  const { nebPos, nebType, humidifier } = simState;
+  const condition = (humidifier === 'on') ? 'Heated' : 'Unheated';
+  
+  let msg = `<b>${condition} Circuit Analysis:</b><br>`;
+  
+  if (nebType === 'vm' && nebPos === 'pos2' && humidifier === 'off') {
+      msg += "<span class='text-green-700 font-bold'>Optimal Configuration!</span> VM at Position 2 (6\" from Y) in an unheated circuit yields the highest deposition (30.24%) in this dataset.";
+  } else if (nebType === 'jn' && nebPos === 'pos2' && humidifier === 'on') {
+      msg += "<span class='text-red-600 font-bold'>Poor Efficiency.</span> Jet Nebuliser at Position 2 in a heated circuit performs poorly (3.61%) due to rain-out and lack of reservoir effect.";
+  } else if (nebPos === 'pos3') {
+      msg += "<b>Position 3 (Proximal/Vent):</b> Allows tubing to act as a reservoir. ";
+      if (nebType === 'vm' && humidifier === 'off') msg += "Significant gain for VM in dry circuit (24.20%).";
+      if (nebType === 'jn' && humidifier === 'off') msg += "Best position for Jet Nebuliser in dry circuit (14.66%).";
+  } else if (nebPos === 'pos1') {
+      msg += "<b>Position 1 (Distal/Y-Piece):</b> Minimizes transit loss, but bypasses reservoir benefits.";
+  } else if (nebPos === 'pos2') {
+      msg += "<b>Position 2 (6\" from Y):</b> Balance between reservoir volume and transit loss.";
   }
-
-  if (simState.nebType === 'jet' && simState.nebPos === 'preHumid') {
-    status += " <br>Optimizing Jet Nebuliser Reservoir Effect.";
-  } else if (simState.nebType !== 'jet' && simState.nebPos === 'yPiece') {
-    status += " <br>Optimizing Mesh/USN Distal Placement (min. tubing loss).";
-  }
   
-  if (simState.biasFlow === '5') status += " <span class='text-red-600 font-bold'>High Bias Flow (Washout Active!).</span>";
-  
-  document.getElementById("leftStatus").innerHTML = status;
+  document.getElementById("leftStatus").innerHTML = msg;
 }
 
 function setupControls() {
@@ -304,356 +370,251 @@ function setupControls() {
       simState[group.dataset.group] = btn.dataset.value;
       group.querySelectorAll(".control-button").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      phaseTimer = 0; 
-      breathPhase = 0; 
+      
       particles = []; 
       updateText();
-      // Restart animation here to ensure new particles load
       startAnimation(); 
     });
     const initialBtn = group.querySelector(`[data-value="${simState[group.dataset.group]}"]`);
     if (initialBtn) initialBtn.classList.add("active");
   });
+  
+  // Config Modal
+  const modal = document.getElementById('configModal');
+  document.getElementById('configBtn').onclick = () => modal.classList.add('open');
+  document.getElementById('closeConfigTop').onclick = () => modal.classList.remove('open');
+  document.getElementById('cancelConfig').onclick = () => modal.classList.remove('open');
+  
+  document.getElementById('saveConfig').onclick = () => {
+      // Read all inputs and update matrix
+      ['jn', 'vm', 'un'].forEach(type => {
+          ['1', '2', '3'].forEach(p => {
+             dataMatrix[type][`pos${p}`].heated = parseFloat(document.getElementById(`${type}_p${p}_h`).value);
+             dataMatrix[type][`pos${p}`].unheated = parseFloat(document.getElementById(`${type}_p${p}_u`).value);
+          });
+      });
+      modal.classList.remove('open');
+      updateText();
+  };
+  
   updateText();
 }
 
-// --- Drawing & Animation Functions ---
-
-function moveTowards(p, target, speed) {
-  const dx = target.x - p.x;
-  const dy = target.y - p.y;
-  const dist = Math.hypot(dx, dy);
-  
-  if (dist < speed) {
-    p.x = target.x;
-    p.y = target.y;
-    return true; // Reached target
-  } else {
-    p.x += (dx / dist) * speed;
-    p.y += (dy / dist) * speed;
-    return false;
-  }
-}
+// --- Drawing ---
 
 function createParticle() {
-  const count = simState.nebType === 'vmn' ? 2 : 1;
+  const count = (simState.nebType === 'vm') ? 2 : 1;
   
-  let startX = (simState.nebPos === 'preHumid') ? 280 : 760;
-  let startY = (simState.nebPos === 'preHumid') ? 330 : 340;
+  let startX = 0;
+  let startY = 330;
+  
+  // Coordinates based on getPath nodes
+  if (simState.nebPos === 'pos3') startX = 280; // 6" from Vent
+  if (simState.nebPos === 'pos2') startX = 680; // 6" from Y
+  if (simState.nebPos === 'pos1') startX = 880; // Between Y & ETT (Just after Y in drawing logic)
 
   for(let i=0; i<count; i++) {
     particles.push({
       x: startX,
-      y: startY + (Math.random() * 10 - 5),
+      y: startY + (Math.random() * 14 - 7),
       life: 1.0,
       targetIndex: 0 
     });
   }
 }
 
+function drawMarker(x, y, label, subtext) {
+    ctx.fillStyle = colors.marker;
+    ctx.beginPath(); ctx.arc(x, y + 45, 14, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "white"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(label, x, y+49);
+    
+    ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif";
+    ctx.fillText(subtext, x, y+65);
+    
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.beginPath(); ctx.moveTo(x, y+15); ctx.lineTo(x, y+31); ctx.stroke();
+}
+
 function drawCircuit() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.font = "bold 14px sans-serif";
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
 
   const paths = getPath();
 
   // 1. Ventilator
-  ctx.fillStyle = colors.vent; ctx.roundRect(40, 280, 120, 100, 10); ctx.fill();
-  ctx.fillStyle = "#475569"; ctx.fillText("Ventilator", 60, 335);
+  ctx.fillStyle = colors.vent; ctx.roundRect(20, 280, 100, 100, 10); ctx.fill();
+  ctx.fillStyle = "#475569"; ctx.fillText("Vent", 45, 335);
 
-  // 2. Inspiratory Limb Path drawing
+  // 2. Insp Limb Wireframe
   ctx.lineWidth = 24; ctx.strokeStyle = colors.tube;
   ctx.beginPath();
-  ctx.moveTo(paths.insp[0].x, paths.insp[0].y);
-  for(let i=1; i<paths.insp.length; i++) {
-      if(i < paths.insp.length - 1) ctx.lineTo(paths.insp[i].x, paths.insp[i].y);
-  }
+  ctx.moveTo(100, 330);
+  ctx.lineTo(380, 330); // to hum
+  ctx.moveTo(520, 330); // from hum
+  ctx.lineTo(840, 330); // to Y
   ctx.stroke();
 
-  // 3. Humidifier Graphic (If ON)
+  // 3. Humidifier
   if (simState.humidifier === 'on') {
-    ctx.fillStyle = colors.humidifierBody;
-    ctx.fillRect(380, 290, 140, 100);
-    ctx.fillStyle = colors.humidifierWater;
-    ctx.fillRect(390, 340, 120, 40);
-    ctx.fillStyle = "white"; ctx.fillText("Humidifier", 410, 320);
+    ctx.fillStyle = colors.humidifierBody; ctx.fillRect(380, 290, 140, 100);
+    ctx.fillStyle = colors.humidifierWater; ctx.fillRect(390, 340, 120, 40);
+    ctx.fillStyle = "white"; ctx.fillText("Heated Humidifier", 390, 320);
   } else {
-     ctx.strokeStyle = colors.tube; ctx.lineWidth = 24;
-     ctx.beginPath(); ctx.moveTo(300, 330); ctx.lineTo(600, 330); ctx.stroke();
+     ctx.beginPath(); ctx.moveTo(380, 330); ctx.lineTo(520, 330); ctx.stroke(); // Bypass
   }
 
-  // 4. Flow Indicators
-  ctx.strokeStyle = (breathPhase === 0) ? colors.inspActive : colors.inspStatic;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(paths.insp[0].x + 10, paths.insp[0].y);
-  for(let i=1; i<paths.insp.length - 2; i++) {
-      ctx.lineTo(paths.insp[i].x, paths.insp[i].y);
-  }
-  ctx.stroke();
+  // 4. Markers
+  drawMarker(280, 330, "3", "6\" from Vent");
+  drawMarker(680, 330, "2", "6\" from Y");
+  drawMarker(880, 330, "1", "ETT-Y");
 
-  // 5. Y-Piece & Distal
-  ctx.fillStyle = colors.yPiece; ctx.beginPath(); ctx.arc(740, 330, 25, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "white"; ctx.fillText("Y", 735, 335);
+  // 5. Y-Piece & Lung
+  ctx.fillStyle = colors.yPiece; ctx.beginPath(); ctx.arc(840, 330, 25, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText("Y", 840, 335);
   
   ctx.strokeStyle = "#fb7185"; ctx.lineWidth = 18;
-  ctx.beginPath(); ctx.moveTo(760, 330); ctx.lineTo(880, 380); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(860, 330); ctx.lineTo(920, 380); ctx.stroke();
 
-  // 6. Lung
   ctx.fillStyle = colors.lung;
-  const scale = simState.patientType === 'adult' ? 1 : 0.7;
-  ctx.beginPath(); ctx.ellipse(950, 450, 80*scale, 100*scale, 0.2, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "white"; ctx.fillText(simState.patientType.toUpperCase(), 920, 450);
+  ctx.beginPath(); ctx.ellipse(980, 450, 80, 100, 0.2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "white"; ctx.fillText("Patient", 980, 450);
 
-  // 7. Expiratory Limb
+  // 6. Exp Limb
   ctx.lineWidth = 24; ctx.strokeStyle = colors.tube;
   ctx.beginPath(); 
   ctx.moveTo(paths.exp[0].x, paths.exp[0].y - 10);
   ctx.lineTo(paths.exp[1].x, paths.exp[1].y); 
   ctx.lineTo(paths.exp[2].x, paths.exp[2].y); ctx.stroke();
 
-  // Nebulizer
-  let nebX = (simState.nebPos === 'preHumid') ? 280 : 750;
-  let nebY = (simState.nebPos === 'preHumid') ? 330 : 340;
+  // 7. Nebulizer Visual
+  let nebX = 0;
+  if(simState.nebPos === 'pos3') nebX = 280;
+  if(simState.nebPos === 'pos2') nebX = 680;
+  if(simState.nebPos === 'pos1') nebX = 880; 
   
-  ctx.fillStyle = colors.nebGlow; ctx.shadowBlur = 15; ctx.shadowColor = colors.nebGlow;
-  ctx.beginPath(); ctx.arc(nebX, nebY, 15, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = colors.nebGlow; ctx.shadowBlur = 20; ctx.shadowColor = colors.nebGlow;
+  ctx.beginPath(); ctx.arc(nebX, 320, 15, 0, Math.PI*2); ctx.fill();
   ctx.shadowBlur = 0;
+  
+  ctx.fillStyle = "#0ea5e9"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText(simState.nebType.toUpperCase(), nebX, 300);
+}
+
+function moveTowards(p, target, speed) {
+  const dx = target.x - p.x;
+  const dy = target.y - p.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < speed) { p.x = target.x; p.y = target.y; return true; }
+  else { p.x += (dx/dist)*speed; p.y += (dy/dist)*speed; return false; }
 }
 
 function animate() {
-  // Use requestAnimationFrame to loop only if the function is still active
   if(!animationRunning) return; 
-
   phaseTimer++;
-  const cycleLength = simState.patientType === 'adult' ? 240 : 150;
-  if (phaseTimer > cycleLength) { breathPhase = (breathPhase + 1) % 2; phaseTimer = 0; }
+  if (phaseTimer > 240) { breathPhase = (breathPhase + 1) % 2; phaseTimer = 0; }
 
   drawCircuit();
   createParticle();
 
   const paths = getPath();
-  const inspPoints = paths.insp;
-  const expPoints = paths.exp;
-
-  // Speeds
   const speedInsp = 4.0;
   const speedBias = (simState.biasFlow === '2') ? 0.5 : 3.0;
 
   particles.forEach(p => {
-    
     let target = null;
     let speed = 0;
-
-    const inHumidifier = (simState.humidifier === 'on' && p.x > 380 && p.x < 520);
     
     if (breathPhase === 0) {
-        // INSPIRATION: Move forward through inspNodes
-        let targetIndex = 0;
-
-        if (simState.humidifier === 'on') {
-            if (p.x < 380) targetIndex = 1; 
-            else if (p.x < 450) targetIndex = 2; // Deep chamber
-            else if (p.x < 520) targetIndex = 3; // Outlet
-            else if (p.x < 740) targetIndex = 4; // Y-Piece
-            else if (p.x < 880) targetIndex = 5; // ET
-            else targetIndex = 6; // Lung
-        } else {
-            if (p.x < 740) targetIndex = 1; // Y-Piece
-            else if (p.x < 880) targetIndex = 2; // ET
-            else targetIndex = 3; // Lung
-        }
-
-        target = inspPoints[targetIndex];
-        speed = speedInsp;
-
-    } else {
-        // EXPIRATION (Bias Flow Washout)
-        // Washout depends on particle location relative to Y-Piece (740, 330)
+        // Inspiration
+        let tIdx = 0;
+        if (p.x < 280) tIdx = 1;
+        else if (p.x < 380) tIdx = 2;
+        else if (p.x < 450) tIdx = 3;
+        else if (p.x < 520) tIdx = 4;
+        else if (p.x < 680) tIdx = 5;
+        else if (p.x < 840) tIdx = 6;
+        else if (p.x < 920) tIdx = 7;
+        else tIdx = 8;
         
-        if (p.x < 740) {
-            // In Insp Limb -> Move forward with bias flow (Reservoir)
-            target = {x: 740, y: 330};
-            speed = speedBias;
+        target = paths.insp[tIdx];
+        speed = speedInsp;
+    } else {
+        // Expiration (Washout)
+        // Washout only happens if particle is not already in patient
+        if (p.x < 840) {
+             target = {x: 840, y: 330}; // push to Y
+             speed = speedBias;
+        } else if (p.x > 920) {
+             // Trapped in lung, fade out
+             p.life -= 0.02;
         } else {
-            // In Lung or Y-piece -> Washout to Exp Limb
-            if (p.x > 500 && p.y > 200) target = expPoints[1]; // Knee
-            else target = expPoints[2]; // Vent
-            speed = (simState.biasFlow === '5') ? 4.0 : 2.0;
-        }
-    }
-
-    // --- RAIN OUT LOGIC (Humidification Loss) ---
-    if (inHumidifier && Math.random() < 0.05) {
-        p.life -= 0.1; 
-    }
-    
-    // --- MOVEMENT ---
-    if (target) {
-        if (moveTowards(p, target, speed)) {
-             // Nudge past sticky points at the Y-Piece for smoother flow into Exp
-             if (target.x === 740) {
-                 p.x = 735;
-                 if (breathPhase === 1) p.y = 325; // Nudge up into exp path
-             }
+             // In Y or ET, wash out to Exp
+             if(p.x > 600 && p.y < 200) target = paths.exp[2];
+             else target = paths.exp[1];
+             speed = 3.0;
         }
     }
     
-    // --- LUNG ABSORPTION ---
-    if (p.x > 900 && breathPhase === 0) p.life -= 0.1;
-
-    // Render
+    if(target) moveTowards(p, target, speed);
+    if(p.x > 950 && breathPhase === 0) p.life -= 0.1; // Absorb in lung
+    
     ctx.fillStyle = `rgba(37, 99, 235, ${p.life})`;
-    if (simState.nebType === 'jet') ctx.fillStyle = `rgba(245, 158, 11, ${p.life})`; // Amber for Jet
-    if (simState.nebType === 'usn') ctx.fillStyle = `rgba(139, 92, 246, ${p.life})`; // Violet for USN
-    
+    if (simState.nebType === 'jn') ctx.fillStyle = `rgba(245, 158, 11, ${p.life})`;
+    if (simState.nebType === 'un') ctx.fillStyle = `rgba(139, 92, 246, ${p.life})`;
     ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
   });
 
-  particles = particles.filter(p => p.life > 0 && p.x > 100);
+  particles = particles.filter(p => p.life > 0 && p.x > 50);
   requestAnimationFrame(animate);
 }
 
 function startAnimation(){
-  // Stop existing animation loop if any
   animationRunning = false; 
   particles = [];
   breathPhase = 0;
   phaseTimer = 0;
-  
   createParticle();
-  
   animationRunning = true;
   requestAnimationFrame(animate);
 }
 
-// --- PDF Generation Function (The reliable version) ---
 function generatePDF() {
-    // CRITICAL CHECK: Ensure jsPDF library is available
-    if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
-        console.error("PDF generation failed: jsPDF library not fully loaded.");
-        // Use a simple alert, as custom modals are not allowed for this error context.
-        alert("PDF generator not ready yet. Please try clicking the button again in a moment.");
-        return;
-    }
-    
+    if (typeof window.jspdf === 'undefined') return;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'pt', 'a4');
-
-    // --- PDF Styling ---
-    const marginX = 40;
-    let cursorY = 40;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const usableWidth = pageWidth - marginX * 2;
-    const colorPrimary = [59, 130, 246]; // blue-500
-    const colorSecondary = [244, 63, 94]; // rose-500
-    const colorAccent = [139, 92, 246]; // violet-500
-
-    function drawHeading(text, size, color) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(size);
-      doc.setTextColor(color[0], color[1], color[2]);
-      cursorY += (size + 5);
-      doc.text(text, marginX, cursorY);
-      doc.setTextColor(0, 0, 0); 
-      cursorY += 5;
-    }
     
-    function drawText(text, size = 10, style = "normal", indent = 0) {
-      doc.setFont("helvetica", style);
-      doc.setFontSize(size);
-      const splitText = doc.splitTextToSize(text, usableWidth - indent);
-      cursorY += 5;
-      doc.text(splitText, marginX + indent, cursorY);
-      cursorY += (splitText.length * (size + 2));
-    }
-
-    function drawBullet(text) {
-        // Use "text" for markdown processing before passing to PDF
-        drawText("• " + text.replace(/\*\*/g, '').replace(/\[([^\]]+)\]/g, '$1'), 10, "normal", 10);
-    }
+    let y = 40;
+    doc.setFontSize(18); doc.text("Nebuliser Deposition Report", 40, y); y+=30;
+    doc.setFontSize(10); doc.text("Exact Data Mapping (Mean %)", 40, y); y+=20;
     
-    // --- LAYOUT START ---
-
-    // Title Block
-    drawHeading("Comparative Effects of Nebulisers in Ventilated Adults", 18, [0, 0, 0]);
-    drawText("Analysis comparing Jet, Vibrating Mesh, and Ultrasonic nebulisers, focusing on efficiency, position, and circuit effects.", 9, "italic");
-    drawText("Data Sources: Ari et al. (2010), Lin HL et al. (2021), and related clinical guidelines.", 8, "normal");
-
-
-    // --- SECTION 1: Deposition Efficiency ---
-    drawHeading("1. Deposition Efficiency in the Lungs", 14, colorPrimary);
+    const headers = [["Condition", "Pos 1 (ETT-Y)", "Pos 2 (6\" from Y)", "Pos 3 (6\" from Vent)"]];
     
-    drawText("Mechanically ventilated patients receive a smaller fraction of the nebulised drug in the lungs. Efficiency depends heavily on particle size and output mechanism:", 10);
+    // Helper to format
+    const fmt = (t, p) => `${dataMatrix[t][p].heated}% / ${dataMatrix[t][p].unheated}%`;
     
-    drawBullet("Vibrating Mesh Nebulisers (VMN) are the most efficient, achieving 12–35% deposition in optimized settings. Their fine particle size (3–5 µm) and minimal drug waste drive this high performance.");
-    drawBullet("Ultrasonic Nebulisers (USN) are moderately efficient, typically delivering 5–10% of the dose. Their higher output and intermediate particle size contribute to improved delivery over jets.");
-    drawBullet("Jet Nebulisers (JN) are the least efficient, often delivering only ~3–5% of the dose under typical ventilator conditions, due to heterodisperse particles and high residual volume.");
-
-
-    // --- SECTION 2: Impact of Humidification and Flow ---
-    drawHeading("2. Humidification and Bias Flow Impact", 14, colorSecondary);
-    
-    drawText("Active humidification causes aerosol particles to grow and deposit prematurely, leading to up to a 50% reduction in delivery. In contrast, bias flow affects aerosol availability:", 10);
-    
-    drawBullet("High Bias Flow (5 L/min) creates a Washout Effect, flushing aerosol into the expiratory limb during exhalation, significantly reducing the available dose for the next inspiration.");
-    drawBullet("Low Bias Flow (2 L/min) minimizes washout, which is essential for maximizing both distal and proximal placements.");
-    drawText("Crucially, HME filters must be removed or bypassed during nebulisation, as they can trap over 90% of the dose.", 10, "bold");
-
-
-    // --- SECTION 3: Optimal Placement and The Reservoir Effect ---
-    drawHeading("3. Optimal Nebuliser Placement", 14, colorAccent);
-
-    drawText("Placement strategy is determined by the nebuliser's output mechanism:", 10);
-    
-    drawBullet("Jet Nebulisers (JN) perform best when placed Proximal (upstream, near the ventilator). Their continuous output fills the long inspiratory tubing during exhalation, creating a reservoir that is inhaled on the next breath.");
-    drawBullet("VMN & USN perform best when placed Distal (close to the Y-Piece). Because these devices do not add continuous flow, minimal tubing length is preferred to reduce simple circuit deposition loss.");
-
-    // --- ANSWER TO VMN RESERVOIR QUESTION ---
-    drawHeading("Why the Reservoir Effect Does NOT Primarily Benefit VMN", 12, colorPrimary);
-    drawText("The Reservoir Effect (where the inspiratory tubing stores aerosol between breaths) is less effective for the VMN compared to the JN for two main reasons:", 10, "bold");
-    
-    drawBullet("VMN does not add flow. The aerosol produced by a VMN tends to stay localized near the device until the ventilator breath pulls it forward. When placed proximally, the aerosol bolus must travel through the entire circuit volume, increasing the time available for gravitational sedimentation (particles falling out) before reaching the patient.");
-    drawBullet("JN's continuous gas output actively pushes aerosol into the tubing, ensuring the entire limb is 'charged' with a higher density of medication, making it a true functional reservoir. The VMN lacks this active pushing mechanism.");
-    drawText("Therefore, the VMN relies on minimizing circuit length (Distal placement) to maximize deposition, while the JN relies on maximizing reservoir volume (Proximal placement) to maximize efficiency.", 10);
-
-    // --- SECTION 4: Comparative Summary Table ---
-    cursorY = doc.autoTable.previous ? doc.autoTable.previous.finalY + 15 : cursorY + 15;
-    drawHeading("4. Comparative Summary Table", 14, colorSecondary);
-
-    const tableData = {
-      head: [['Feature', 'Jet Nebuliser (JN)', 'Vibrating Mesh (VMN)', 'Ultrasonic (USN)']],
-      body: [
-        ['Deposition (% of dose)', 'Low: ~3–5%', 'Highest: ~12–35%', 'Moderate: ~5–10%'],
-        ['Optimal Placement', 'Upstream (Proximal/Reservoir)', 'Downstream (Distal/Y-Piece)', 'Downstream (Distal/Y-Piece)'],
-        ['Flow Interference', 'High (Adds 6–8 L/min)', 'None (Electric)', 'None (Electric)'],
-        ['Residual Volume / Waste', 'High (~1 mL)', 'Minimal (<0.5 mL)', 'Moderate'],
-        ['Cost', 'Low (Inexpensive)', 'High (Expensive Equipment)', 'High (Bulky Equipment)'],
-      ]
-    };
+    const body = [
+        ["Jet (JN) [Heated / Unheated]", fmt('jn', 'pos1'), fmt('jn', 'pos2'), fmt('jn', 'pos3')],
+        ["Mesh (VM) [Heated / Unheated]", fmt('vm', 'pos1'), fmt('vm', 'pos2'), fmt('vm', 'pos3')],
+        ["Ultra (UN) [Heated / Unheated]", fmt('un', 'pos1'), fmt('un', 'pos2'), fmt('un', 'pos3')]
+    ];
     
     doc.autoTable({
-      startY: cursorY + 5,
-      head: tableData.head,
-      body: tableData.body,
-      theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] }, // blue-500
-      styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
-      margin: { top: 20, left: marginX, right: marginX },
+        startY: y,
+        head: headers,
+        body: body,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185] },
+        styles: { fontSize: 10 }
     });
-
-    doc.save("nebuliser_comparative_report.pdf");
-  }
-// --- END PDF GENERATION FUNCTION ---
-
+    
+    doc.save("nebuliser_data_report.pdf");
+}
 
 window.onload = function() {
-  // Ensure DOM elements are ready before starting animation/controls
   animationRunning = true;
   setupControls();
   startAnimation();
-
-  // Attach the PDF listener only after everything else is initialized
   document.getElementById('downloadPdfButton').addEventListener('click', generatePDF);
 };
 </script>
